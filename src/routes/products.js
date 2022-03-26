@@ -19,7 +19,9 @@ products.patch('/image/:id', auth.verifyUserConfirmed, auth.verifySeller, upload
 
 // product review
 products.get('/review', productsController.getProductWithReview)
-products.post('/review', productReviewController.createReview)
+// products.post('/review', productReviewController.createReview)
+products.get('/review/:productId', productReviewController.getReviewsByProduct)
+products.post('/review', auth.verifyUserConfirmed, productReviewController.addReview)
 products.delete('/review/:id', productReviewController.deleteReview)
 products.patch('/review/:id', productReviewController.updateReview)
 

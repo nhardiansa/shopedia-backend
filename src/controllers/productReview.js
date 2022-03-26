@@ -1,3 +1,4 @@
+const { inputValidator, nullDetector } = require('../helpers/requestHandler')
 const { responseHandler } = require('../helpers/responseHandler')
 const ProductReview = require('../models/productReview')
 const Products = require('../models/products')
@@ -60,6 +61,123 @@ exports.updateReview = async (req, res) => {
       return responseHandler(res, 500, 'Unexpected error', null, error)
     } else {
       return responseHandler(res, 500, 'Unexpected error')
+    }
+  }
+}
+
+exports.addReview = async (req, res) => {
+  try {
+    const { id: userId } = req.user
+
+    const rules = {
+      productId: 'required|number',
+      comment: 'required|string',
+      parentId: 'number'
+    }
+
+    const data = inputValidator(req.body, rules)
+
+    const error = nullDetector(data, rules)
+    if (error) {
+      return responseHandler(res, 400, error)
+    }
+
+    const product = await Products.findByPk(data.productId)
+
+    if (!product) {
+      return responseHandler(res, 404, 'Product not found')
+    }
+
+    if (data.comment.length > 200) {
+      return responseHandler(res, 400, 'Max comment length is 200')
+    }
+
+    if (data.parentId) {
+      const parent = await ProductReview.findByPk(data.parentId)
+
+      if (!parent) {
+        return responseHandler(res, 404, 'Review not found')
+      }
+    }
+
+    const review = await ProductReview.create({
+      userId,
+      ...data
+    })
+
+    const newReview = await ProductReview.findByPk(review.id, {
+      attributes: {
+        exclude: ['userId']
+      },
+      include: [
+        {
+          model: Users,
+          attributes: ['id', 'name', 'image']
+        }
+      ]
+    })
+
+    return responseHandler(res, 200, 'Review Created', newReview)
+
+    // return responseHandler(res, 200, 'Not implemented')
+  } catch (err) {
+    console.error(err)
+
+    if (err.errors) {
+      const error = err.errors.map(err => ({ field: err.path, message: err.message }))
+      if (error) {
+        return responseHandler(res, 500, 'Error while adding review', null, error)
+      } else {
+        return responseHandler(res, 500, 'Unexpected error')
+      }
+    } else {
+      return responseHandler(res, 500, 'Error occured')
+    }
+  }
+}
+
+exports.getReviewsByProduct = async (req, res) => {
+  try {
+    const { productId } = req.params
+
+    const product = await Products.findByPk(productId)
+
+    if (!product) {
+      return responseHandler(res, 404, 'Product not found')
+    }
+
+    const reviews = await ProductReview.findAll({
+      where: {
+        productId,
+        parentId: null
+      },
+      attributes: ['id', 'userId', 'comment', 'createdAt'],
+      include: [
+        {
+          model: Users,
+          attributes: ['name', 'image']
+        },
+        {
+          model: ProductReview,
+          as: 'replies',
+          attributes: ['id', 'userId', 'comment', 'createdAt']
+        }
+      ]
+    })
+
+    return responseHandler(res, 200, `Reviews for ${product.name}`, reviews)
+  } catch (err) {
+    console.error(err)
+
+    if (err.errors) {
+      const error = err.errors.map(err => ({ field: err.path, message: err.message }))
+      if (error) {
+        return responseHandler(res, 500, 'Error while getting reviews', null, error)
+      } else {
+        return responseHandler(res, 500, 'Unexpected error')
+      }
+    } else {
+      return responseHandler(res, 500, 'Error occured while getting reviews')
     }
   }
 }
